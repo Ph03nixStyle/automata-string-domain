@@ -1,0 +1,8 @@
+(library
+ (name ast)
+ (modules ast))
+
+ (library
+ (name language)
+ (modules language)
+ (libraries ast automates automates_builder))

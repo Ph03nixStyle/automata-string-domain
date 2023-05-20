@@ -1,0 +1,13 @@
+(library
+ (name automates)
+ (libraries num)
+ (modules automates)
+ (inline_tests)
+ (preprocess (pps ppx_inline_test)))
+
+(library
+ (name automates_builder)
+ (modules automates_builder)
+ (libraries automates)
+ (inline_tests)
+ (preprocess (pps ppx_inline_test)))

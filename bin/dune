@@ -1,0 +1,4 @@
+(executable
+ (public_name automata_string_domain)
+ (name main)
+ (libraries automates automates_builder language ast))
