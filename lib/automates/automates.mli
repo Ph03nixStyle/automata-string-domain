@@ -44,6 +44,7 @@ val est_deterministe : 'a t -> bool
 val accepte_mot : 'a t -> 'a mot_t -> bool
 
 (** [determinise a] Renvoie une version déterministe de l'automate [a].*)
+val determinise_non_renomme : 'a t -> 'a t
 val determinise : 'a t -> 'a t
 
 (** [union a1 a2] Renvoie un automate représentant l'union de [a1] et [a2]*)

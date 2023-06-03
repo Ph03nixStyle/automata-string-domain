@@ -1,26 +1,139 @@
-(* open Automates;;
-open Language;;
+open! Automates;;
+(* open Language;;
 open Ast;; *)
 
-(*TODO ça peut être marrant une "réciproque" pour passer des automates aux programmes nan ? :D ça permettrait directement de faire un programme safe by design.*)
+(*(abandon de l'idée for now) ça peut être marrant une "réciproque" pour passer des automates aux programmes nan ? ça permettrait directement de faire un programme safe by design.*)
 
-(*TODO
-   - minimal_brzozowski
-   - minimal_autre
-   - 2^n illustrer la gravité du truc (illustrations/faire le code/générer un nombre arbitraire de lignes "if" pour courbe évolutive)
-   - faire plusieurs ast (chacun dans un exécutable, ou alors tout ici), avec un fichier associé pour le programme qu'il représente.
-    chacun devra créer un fichier .dot qu'on visualise à part.*)
+
+(*TODO autre algo minimisation si le temps*)
+(*TODO faire graphique d'évolution de perf + de nb d'états. Faire générateur de progarmmes *)
+
+
+(* let generate_if (n: int) : Ast.stat = (*TODO vite continuer ça*)
+  let rec aux (acc: Ast.stat list) n =
+    if n > 0 then aux ((If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1")))))::acc) (n-1)
+    else acc
+  in
+  let ifs = aux [] n in
+  Seq(StringOp(AssignGlobalString(StringLiteral""))::ifs) *)
+;;
+
+(* let time f x =
+  let start = Unix.gettimeofday ()
+  in let res = f x
+  in let stop = Unix.gettimeofday ()
+  in let () = Printf.printf "Execution time: %fs\n%!" (stop -. start)
+  in
+     res *)
+
+
 
 let () =
   let _sigma = [|'0'; '1'|] in
   let _code: Ast.stat =
     Seq([
       StringOp(AssignGlobalString(StringLiteral""));
+      LogStates;
       If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
       If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
       If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
       If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
       If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;
+      If(Unknown, StringOp(PushRight(StringLiteral("0"))), StringOp(PushRight(StringLiteral("1"))));
+      LogStates;
+      Minimize;
+      LogStates;      
     ]) in
   let _code1: Ast.stat = 
     Seq([
@@ -56,7 +169,15 @@ let () =
   let _res5 = Automates.etoile_push_right (Automates_builder.epsilon _sigma) _res1 in
   let _res6 = Automates.union _res4 _res5 in
 
-  Automates.generate_graphviz_file _res "test0";
-  Automates.generate_graphviz_file (Automates.determinise _res) "test0";
-  (* Automates.generate_graphviz_file (Automates.minimal_brzozowski _res) "test0"; *)
+  Automates.generate_graphviz_file _res "test";
+  (* Automates.affiche_char _res; *)
+  (* Automates.affiche_char (determinise _res); *)
+  (* Automates.affiche_char (transpose (determinise _res)); *)
+  (* Automates.generate_graphviz_file _res "test_determinise"; *)
+  (* Automates.generate_graphviz_file (transpose _res) "test_determinise"; *)
+  (* Automates.generate_graphviz_file (determinise_non_renomme (transpose _res)) "test_determinise"; *)
+  (* Automates.generate_graphviz_file (transpose (determinise (transpose _res))) "test_determinise"; *)
+  (* Automates.generate_graphviz_file (determinise (transpose (determinise (transpose _res)))) "test_determinise"; *)
+
+  (* Automates.generate_graphviz_file (minimal_brzozowski _res) "test_minimal"; *)
 ;;

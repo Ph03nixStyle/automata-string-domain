@@ -9,7 +9,7 @@ type 'a t = {
 	sigma: 'a array; (*alphabet*)
 	i: etat_t list;  (*états initiaux*)
 	f: etat_t list;  (*états finaux*)
-	delta: (etat_t * 'a, etat_t list) Hashtbl.t (*fonction de transitions: (q, a) -> [q1, ..., qN]*)
+	delta: (etat_t * 'a, etat_t list) Hashtbl.t (*fonction de transitions*)
 }
 
 let generate_graphviz_file (a: char t) (name: string) : unit =
@@ -237,49 +237,51 @@ let etats_non_vides (a: 'a t) : (etat_t, int) Hashtbl.t * etat_t list * etat_t l
   let res: int ref = ref 0 in
   let i = ref [] in
   let f = ref [] in
-  let table = Hashtbl.create a.nb in
-  List.iter (fun etat ->
-    if not (Hashtbl.mem table etat) then (
-      Hashtbl.add table etat !res;
-      i := (etat::!i);
-      if List.mem etat a.f then f := (etat::!f);
+  let table = Hashtbl.create (min 10000 a.nb) in
+  List.iter (fun q ->
+    if not (Hashtbl.mem table q) then (
+      Hashtbl.add table q !res;
+      i := (q::!i);
+      if List.mem q a.f then f := (q::!f);
       incr res
     )
   ) a.i;
-  Hashtbl.iter (fun (etat_depart, _) lst_etats ->
-    if not (Hashtbl.mem table etat_depart) then (
-      Hashtbl.add table etat_depart !res;
+  Hashtbl.iter (fun (q, _) ql ->
+    if not (Hashtbl.mem table q) then (
+      Hashtbl.add table q !res;
       incr res
     );
-    List.iter (fun etat' -> if not (Hashtbl.mem table etat') then (
-      Hashtbl.add table etat' !res;
-      if List.mem etat' a.f && not (List.mem etat' !f) then f := (etat'::!f);
-      incr res)
-    ) lst_etats
+    List.iter (fun q' -> 
+      if List.mem q' a.f && not (List.mem q' !f) then f := (q'::!f);
+      if not (Hashtbl.mem table q') then (
+        Hashtbl.add table q' !res;
+        incr res
+      )
+    ) ql
   ) a.delta;
 
-  (table, !i, !f, !res)
+  let i = List.map (fun q -> Hashtbl.find table q) !i in
+  let f = List.map (fun q -> Hashtbl.find table q) !f in
+
+  (table, i, f, !res)
 ;;
   
   
 (*Renomme les états de l'automate pour les ramener dans [0, n-1] grâce à etats_non_vides.*)
 let renomme (a: 'a t) : 'a t =
-  let (table, i_sans_vide, f_sans_vide, nb_sans_vide) = etats_non_vides a in (*renvoie une table ancien_etat -> etat_renommé*)
-  let delta_sans_vide = Hashtbl.create nb_sans_vide in
-  Hashtbl.iter (fun (etat_depart, lettre) lst_etats ->
-    let etat_depart_id = Hashtbl.find table etat_depart in
-    List.iter (fun etat' ->
-      let etat'_id = Hashtbl.find table etat' in
-      ajouter_transition_delta delta_sans_vide etat_depart_id lettre etat'_id
-    ) lst_etats
+  let (table, i, f, nb) = etats_non_vides a in
+  let delta = Hashtbl.create nb in
+  Hashtbl.iter (fun (q, lettre) ql ->
+    let q_id = Hashtbl.find table q in
+    List.iter (fun q' -> ajouter_transition_delta delta q_id lettre (Hashtbl.find table q')) ql
   ) a.delta;
 
   {
-    nb = nb_sans_vide;
+    nb = nb;
     sigma = a.sigma;
-    i = i_sans_vide;
-    f = f_sans_vide;
-    delta = delta_sans_vide;
+    i = i;
+    f = f;
+    delta = delta;
   }
 ;;
 
@@ -297,17 +299,16 @@ On construit maintenant les états finaux:
 		alors on marque ce super-état comme final dans A'.
 On renvoie l'automate finalement construit.*)
 let determinise_non_renomme (a: 'a t) : 'a t =
-  let a = renomme a in
-  if est_deterministe a then a else (*On vérifie avant tout que ce soit bien nécessaire de déterminiser, c'est moins couteux*)
-  let n, taille_sigma = a.nb, Array.length a.sigma in
-  let vus = Array.make (puissance 2 n) false in (*tableau des super-états déjà créés/visités*)
-  let est_etat_final = est_non_disjoint (construit_partie a.f n) in (*application partielle: renvoie si un état contient un état final*)
+  Printf.printf "a.nb: %i\n" a.nb;
+  let taille_sigma = Array.length a.sigma in
+  let vus = Hashtbl.create (min 10000 a.nb) in (*tableau des super-états déjà créés/visités*)
+  let est_etat_final = est_non_disjoint (construit_partie a.f a.nb) in (*application partielle: renvoie si un état contient un état final*)
   
   (*Construction a'*)
   let etat_finaux = ref [] in
-  let delta': (etat_t * 'a, etat_t list) Hashtbl.t = Hashtbl.create (n * n) in (*transitions du déterminisé*)
-  let i' = construit_partie a.i n in
-  vus.(ensemble_vers_entier i') <- true;
+  let delta = Hashtbl.create (Hashtbl.length a.delta) in (*transitions du déterminisé*)
+  let i = construit_partie a.i a.nb in
+  Hashtbl.add vus (ensemble_vers_entier i) true;
 
   let rec process (pile: ensemble list) =
     match pile with
@@ -316,56 +317,56 @@ let determinise_non_renomme (a: 'a t) : 'a t =
       let nb_etat = ensemble_vers_entier etat in
       if est_etat_final etat then etat_finaux := etat::!etat_finaux;
       let nouveaux_voisins = ref [] in
-      for i = 0 to taille_sigma - 1 do 
+      for k = 0 to taille_sigma - 1 do 
         (*Lecture de la lettre courante `i` depuis le super-état `etat`*)         
-        let new_etat = lire_lettre_partie a etat a.sigma.(i) in
-        let nb_new_etat = ensemble_vers_entier new_etat in
+        let new_etat = lire_lettre_partie a etat a.sigma.(k) in
+        if not (est_vide_partie new_etat) then ((*si au moins 1 voisin (sert pour différencier 0 et l'ensemble vide)*)
+          let nb_new_etat = ensemble_vers_entier new_etat in
 
-        (*Ajout de la transition de super-états*)
-        Hashtbl.add delta' (nb_etat, a.sigma.(i)) [nb_new_etat];
-        
-        (*Ajout à la pile si c'est un nouveau super-état*)
-        if not vus.(nb_new_etat) then (
-          nouveaux_voisins := new_etat::!nouveaux_voisins;
-          vus.(nb_new_etat) <- true;
+          (*Ajout de la transition de super-états*)
+          Hashtbl.add delta (nb_etat, a.sigma.(k)) [nb_new_etat];
+          
+          (*Ajout à la pile si c'est un nouveau super-état*)
+          if not (Hashtbl.mem vus nb_new_etat) then (
+            nouveaux_voisins := new_etat::!nouveaux_voisins;
+            Hashtbl.add vus nb_new_etat true
+          )
         )
       done;
       process (!nouveaux_voisins @ tail)
     )
-  in process [i'];
+  in process [i];
 
-  (*On renvoie finalement l'automate*)
   {
-    nb = puissance 2 n; (*Exponentiel en |états| en espace -> on le réduit juste après.*)
+    nb = puissance 2 a.nb; (*Exponentiel en |états| -> on le réduit juste après.*)
     sigma = a.sigma;
-    i = [ensemble_vers_entier i'];
+    i = [ensemble_vers_entier i];
     f = List.map (fun etat -> ensemble_vers_entier etat) !etat_finaux;
-    delta = delta'
+    delta = delta
   }
 ;;
 
 
 (*Déterminise en enlevant les états vides*)
-let determinise a = renomme (determinise_non_renomme a);;
+let determinise (a: 'a t) : 'a t = renomme (determinise_non_renomme (renomme a));;
 
 
 (*Calcule l'automate union de a1 et a2. Prérequis: mêmes alphabets.*)
-let union (a1: 'a t) (a2: 'a t) =
+let union (a1: 'a t) (a2: 'a t) : 'a t =
   (*Fonction auxiliaire pour renommer les états du 2nd automate au-delà des états du 1er automate*)
   let rec rajoute_n_liste lst acc =
     match lst with
     | [] -> List.rev acc
     | h::t -> rajoute_n_liste t ((h + a1.nb)::acc) in
 
-    
   (*Ajoute les transitions de a1 et a2 à delta*)
   let delta = Hashtbl.create (Hashtbl.length a1.delta + Hashtbl.length a2.delta) in
-  Hashtbl.iter (fun (etat_depart, lettre) lst_etats ->
-    Hashtbl.add delta (etat_depart, lettre) lst_etats
+  Hashtbl.iter (fun (q, lettre) ql ->
+    Hashtbl.add delta (q, lettre) ql
   ) a1.delta;
 
-  Hashtbl.iter (fun (etat_depart, lettre) lst_etats ->
-    Hashtbl.add delta (etat_depart + a1.nb, lettre) (rajoute_n_liste lst_etats [])
+  Hashtbl.iter (fun (q, lettre) ql ->
+    Hashtbl.add delta (q + a1.nb, lettre) (rajoute_n_liste ql [])
   ) a2.delta;
 
   {
@@ -423,7 +424,6 @@ let intersection_non_renomme (a1: 'a t) (a2: 'a t) =
               let c = idx_vers_a a b in
               a_ajouter := c::!a_ajouter;
               if not vus.(c) then (
-                let _ = Printf.printf "nouveau voisin: %d (%d, %d)\n" c a b in
                 nouveaux_voisins := c::!nouveaux_voisins;
                 vus.(c) <- true;
               )
@@ -610,7 +610,6 @@ let est_inclus_dans (a1:'a t) (a2: 'a t) : bool =
 (*On étendra aux push_left plus tard (c'est faisable).*)
 (*Pour tout état final du concaténé: on l'enlève du final. On fait le lien depuis *)
 let etoile_push_right (a1: 'a t) (a2: 'a t) : 'a t =
-  if est_vide a2 then (print_endline "vide détecté"; a1) else
   let a = concatenation a1 a2 in  
   (*On raccorde les liaisons qui vont vers a2.f, vers a1.f. Les noeuds de a1 n'ont pas été renommés par concatenation.*)
   List.iter (fun af ->
@@ -631,7 +630,7 @@ let etoile_push_right (a1: 'a t) (a2: 'a t) : 'a t =
   }
 ;;
 
-let _ =
+let%test_unit _ =
   Printexc.record_backtrace true;
   (*Exemple : automate a0*)
   let (a0: char t) = {

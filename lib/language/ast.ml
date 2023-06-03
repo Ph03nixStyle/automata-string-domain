@@ -31,6 +31,8 @@ type stringop =
   
 
 type stat =
+  | LogStates
+  | Minimize
   | Seq of stat list       (*stat; stat; stat...*)
   | If of cond * stat * stat (*if cond then stat else stat done*)
   | Skip                     (*do nothing*)

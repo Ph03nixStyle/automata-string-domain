@@ -1,11 +1,14 @@
 open Ast;;
 
-(*Il faut qu'on donne l'alphabet utilisé dès le début de programme ! Ici on se limite aux char.*)
 
-exception Unknown;;
+let log_states (a: 'a Automates.t) : unit =
+  let f = open_out_gen [Open_append; Open_creat] 0o666 "test.txt"  in
+  Printf.fprintf f "%s\n" (string_of_int a.nb)
+;;
+
 let rec read_cond (c: cond) (sigma: char array) : char Automates.t =
   match c with
-  | Unknown -> raise Unknown 
+  | Unknown -> failwith "should not happen"
   | ConstBool(b) -> if b then Automates_builder.sigma_etoile sigma else Automates_builder.vide sigma
   | ContainsChar(lettre) -> Automates_builder.contient_lettre sigma lettre
   | And(c1, c2) -> Automates.intersection (read_cond c1 sigma) (read_cond c2 sigma)
@@ -38,6 +41,8 @@ let read_stringop (op: stringop) (a: char Automates.t) (collect: bool) =
 
 let rec read_stat (s: stat) (a: char Automates.t)  (collect: bool) : char Automates.t =
   match s with
+  | LogStates -> (log_states a; a)
+  | Minimize -> (Automates.minimal_brzozowski a)
   | Seq(s1) -> begin
     match s1 with
     | [] -> a
@@ -53,7 +58,6 @@ let rec read_stat (s: stat) (a: char Automates.t)  (collect: bool) : char Automa
     let auto_else = Automates.intersection a (Automates.complementaire a_cond) in (*Automate d'entrée du else*)
     Automates.union (read_stat s1 auto_if collect) (read_stat s2 auto_else collect) (*Automate de sortie après le if ou le else*)
   end
-  (*TODO while impl*)
   | While(_c, s1) ->
     let a2 = read_stat s1 (Automates_builder.epsilon a.sigma) true in Automates.etoile_push_right a a2
 ;;
