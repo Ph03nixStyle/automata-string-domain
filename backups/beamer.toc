@@ -1,0 +1,5 @@
+\beamer@sectionintoc {1}{Implémentation des outils}{9}{0}{1}
+\beamer@sectionintoc {2}{Appplication}{16}{0}{2}
+\beamer@sectionintoc {3}{Améliorations diverses}{18}{0}{3}
+\beamer@sectionintoc {4}{Conclusion}{23}{0}{4}
+\beamer@sectionintoc {5}{Annexe}{25}{0}{5}

@@ -1,0 +1,400 @@
+\documentclass{article}
+
+\title{Étude par interprétation abstraite de la correction de strings construits dynamiquement}
+\author{Maire Grégoire}
+\date{}
+
+\usepackage{dsfont}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage{algorithmic}
+\usepackage{algorithm}
+
+\usepackage[style=0,ntheorem]{mdframed}
+\mdfsetup{%
+topline=false,
+rightline=false,
+bottomline=false,
+linewidth=1pt,
+innertopmargin=0pt,
+innerbottommargin=5pt,
+innerleftmargin=10pt,
+innerrightmargin=0pt,
+skipabove=\medskipamount,
+skipbelow=\medskipamount
+}
+
+\newenvironment{preuve}{\begin{proof}[Preuve]}{\end{proof}}
+\newtheorem{theo}{Théorème}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollaire}{Corollaire}
+\newtheorem{algo}{Algorithme}
+\newtheorem{definition}{Définition}
+\newtheorem{lemme}{Lemme}
+\newtheorem{exemple}{Exemple}[section]
+\newenvironment{mdtheo}[1][]%
+   {\begin{mdframed}[linecolor=black]\begin{theo}[#1]}
+   {\end{theo}\end{mdframed}}
+\newenvironment{mdlemme}[1][]%
+   {\begin{mdframed}[linecolor=orange]\begin{lemme}[#1]}
+   {\end{lemme}\end{mdframed}}
+\newenvironment{mddefinition}[1][]%
+   {\begin{mdframed}[linecolor=black]\begin{definition}[#1]}
+   {\end{definition}\end{mdframed}}
+\newenvironment{mdalgo}[1][]%
+   {\begin{mdframed}[linecolor=black]\begin{algo}[#1]}
+   {\end{algo}\end{mdframed}}
+
+\newcommand{\prog}[1]{{\langle #1 \rangle}} 
+
+
+\begin{document}
+
+\maketitle
+
+\section{Bases de l'interprétation abstraite}
+\subsection{Introduction}
+L'interprétation abstraite est une branche de l'informatique qui a pour but d'inférer
+automatiquement des invariants quelconques sur un programme, et ce, à l'aide d'approximations \cite{CousotCousot77-1}.
+Nous nous concentrerons ici en particulier sur l'inférence d'invariants sur les valeurs prises par
+une variable de type \texttt{string} en un point quelconque d'un programme.
+
+Nous justifions ici la nécessité d'approximations lors de telles analyses par le théorème de Rice \cite{Rice},
+qui détermine l'indécidabilité d'une telle tâche:
+
+\begin{mdtheo}[Théorème de Rice]
+    Soit f une fonction booléenne totale, dont l'entrée est le code source d'un algorithme. On suppose que:
+    \begin{itemize}
+        \item f est non-constante;
+        \item f conserve l'équivalence sémantique : si $A$ et $B$ sont deux programmes
+        sémantiquement équivalents, noté $A \sim B$, alors $f(A) = f(B)$.
+    \end{itemize}
+    Alors son problème de décision associé est \underline{indécidable}.
+\end{mdtheo}
+
+\begin{preuve}
+    Soient les programmes $\prog{F} = \prog{\texttt{while (true)}}$,
+    et $\prog{B}$ tel que $f(\prog{B}) \neq f(\prog{F})$ \\
+    On pose $tr$: $(\prog{A},e) \longmapsto \prog{x \mapsto A(e) \;;\; B(x)}$ \\
+    Soient $A$ un algorithme et $e$ une entrée de $A$.
+    \begin{itemize}
+        \item \underline{Si $A(e)$ finit:} $tr(\prog{A}, e)$ $\sim$ $\prog{B}$ donc $f(tr(\prog{A}, e)) = f(\prog{B})$
+        \item \underline{Sinon:} $tr(\prog{A}, e) \sim \prog{F}$ donc $f(tr(\prog{A}, e)) = f(\prog{F})$
+    \end{itemize}    
+    On a ainsi:
+    \begin{align*}
+      f(tr(\prog{A}, e)) = f(\prog{B}) & \iff A(e) \text{ termine} \\
+                                       & \iff Arret(\prog{A}, e)
+    \end{align*}
+  
+    D'où une réduction du problème $Arret$ (resp. $\neg Arret$), d'où l'indécidabilité vu $Arret$ indécidable.
+\end{preuve}
+
+% TODO inclure exemple de référence modulo 3
+
+\subsection{Domaine concret et domaine abstrait d'étude}
+
+On définit par la suite les objets avec lesquels on travaillera afin de préciser ce que l'on entend par
+\emph{approximations}. 
+
+\begin{definition}[Treillis] % TODO pas certain d'inclure : Sinon on va me poser des questions dessus
+    Un treillis est un ensemble muni d'une relation d'ordre partielle, d'un plus grand et plus petit élément,
+    et dans lequel chaque paire d'élément admet une borne inférieure et une borne supérieure.
+    Ici, nos bornes supérieures seront des unions, et nos bornes inférieures des intersections.
+\end{definition}
+
+On peut formaliser le processus d'abstraction à l'aide de deux \emph{domaines}, qui sont en fait des treillis.
+On définit tout d'abord un \emph{domaine concret} qui permet de représenter les états dans lesquels peuvent
+se trouver une variable à un instant donné du programme, puis un \emph{domaine abstrait}
+qui sur-approxime les valeurs concrètes, levant par la même occasion l'indécidabilité.
+
+\begin{definition}[Domaine concret]
+    Soit $\Sigma$ un alphabet.
+    Un élément du domaine concret représente l'ensemble exact des valeurs que peut prendre une variable
+    en un point d'un programme. Notre domaine concret d'étude sera celui des variables de type
+    \emph{\texttt{string}}, $\mathcal{P}(\Sigma^*)$, ou plutôt son treillis associé :
+    $(\mathcal{P}(\Sigma^*), \subseteq, \emptyset, \Sigma^*, \cup, \cap)$
+\end{definition}
+
+\begin{definition}[Domaine abstrait]
+    Un élément du domaine abstrait représente une sur-approximation d'un élément du domaine concret.
+    Nous nous intéresserons au domaine abstrait des automates. Ainsi, notre domaine abstrait sera
+    le treillis des automates, muni de l'union et l'intersection d'automates, de l'inclusion d'un
+    langage induit par rapport à un autre, de l'automate vide et de l'automate complet.
+\end{definition}
+
+Une analyse de programme sur une variable va donc renvoyer un élément du domaine abstrait, qui
+sur-approximera les valeurs concrètes que peut prendre cette variable.
+On attend en particulier d'un domaine abstrait que ses éléments soient représentable par machines,
+ce qui est le cas des automates. Ces derniers permettent de représenter une grande classe de langages
+(les langages rationnels), et il est toujours possible de sur-approximer tout langage par un langage rationnel,
+dans le pire des cas en considérant le langage $\Sigma^*$ comme sur-approximation. \\
+D'autres domaines abstraits sur les variables \texttt{string} existent dans la littérature, mais
+à ma connaissance aucun n'est directement implémenté sur des automates de la sorte.
+Parmis les domaines existants, on peut par exemple trouver un domaine sur les préfixes communs des mots \cite{string_analysis}. % TODO peut etre changer
+
+
+\section{Preuves de programmes}
+\subsection{Récolte de l'ensemble des états de la variable d'étude}
+
+On considère un langage de programmation simple, auquel est intégré un certain nombre de primitives
+n'ayant qu'une seule variable, de type \texttt{string}, et ayant un certain nombre de primitives agissant sur cette dernière.
+On en présente la syntaxe en annexe. On ajoute la possibilité d'avoir une condition
+\texttt{Unknown}, représentant par exemple une exécution non-déterministe ou dépendant d'un programme externe.
+
+% TODO annexe rajouter récolte d'états
+
+
+% TODO réorganiser ce qui précède pour metttre + en valeur
+
+
+\begin{proposition}[Récolte d'états du \texttt{while}]
+    Soit un programme \texttt{P1; (while Unknown do P2)}, tel que \texttt{P2} ne change le string d'étude qu'à travers
+    des concaténations droites. Soit $\mathcal{A}_1$ l'automate résultant de l'analyse de \texttt{P1} (resp. $\mathcal{A}_2$).
+    Alors, sans considération aucune de la condition réelle \texttt{Unknown}, l'automate suivant reconnaîssant
+    $L(\mathcal{A}_1) . (L(\mathcal{A}_2)) ^*$ reconnaît \emph{au moins} l'ensemble des strings qui pourront être construit
+    par le programme.
+\end{proposition}
+
+On peut de la même manière définir une sémantique de récolte de l'ensemble des états possibles
+dans un programme écrit dans le langage précédemment décrit, faisant usage d'unions, intersections,
+et concaténations d'automates. J'ai ainsi implémenté une librairie complète sur les automates,
+ainsi qu'une application de la récolte d'états sur le langage. Ce code est en annexe.
+
+\begin{definition}[Correction d'une analyse]
+    On dit dit d'une analyse automatique d'invariant qu'elle est \emph{correcte}
+    si sa valeur de retour est inclue dans l'ensemble des valeurs satisfaisant l'invariant.
+    Dans notre cas d'étude, on souhaite que l'état du domaine abstrait (un automate) en fin
+    d'analyse de programme soit inclu dans un automate de référence, fourni par l'utilisateur.
+\end{definition}
+
+En effet, toute analyse renvoyant une sur-approximation de l'ensemble des valeurs
+qui peuvent être prises par la variable d'étude en fin de programme,
+il suffit que cette sur-approximation soit contenue dans l'ensemble des valeurs acceptables pour cette variable
+pour que l'on ait alors une preuve rigoureuse de la correction du programme.
+On remarque qu'il est ainsi possible que les approximations effectuées soient trop larges et qu'on puisse alors
+déterminer dans l'analyse qu'un programme est faux, alors qu'il est en réalité correct. Le but est alors de
+minimiser ces faux-positifs.
+
+\begin{proposition}[Complétude du système de récolte]
+    Pour une expression rationnelle $e$ donnée, il est possible de générer un automate
+    pour lequel l'analyse génèrera un automate équivalent à $e$.
+    On crée ainsi une manière de construire des expressions rationnelles à partir d'un programme.
+\end{proposition}
+
+\begin{preuve}
+    Il suffit d'observer que l'on peut effectuer avec la récolte d'états tout ce qui compose
+    un langage rationnel dans sa définition inductive: le langage vide, les lettres $a \in \Sigma$,
+    une union par un \texttt{if/else}, une concaténation par un \texttt{push\_right(str)}, et une étoile de Kleene par un \texttt{while}.
+\end{preuve}
+
+\begin{proposition}[Génération de programme]
+    À l'inverse, on peut générer un programme à partir d'une expression rationnelle $e$, où l'on garantit que
+    ce programme ne pourra créer que des strings appartenant au langage $L(e)$. L'utilisateur n'a alors plus qu'à modifier les
+    conditions \texttt{Unknown} pour obtenir un programme correct.
+\end{proposition}
+
+\begin{preuve}
+    On peut construire le programme inductivement sur la structure de $e$.
+    \begin{itemize}
+        \item Si $e = \varepsilon$, alors \texttt{newstring()} convient;
+        \item Si $e = a \in \Sigma$, alors \texttt{push\_right(a)} convient;
+        \item Si $e = e_1.e_2$ avec \texttt{P1} et $\mathcal{P}_2$ les programmes de $e_1$ et $e_2$, alors \texttt{P1; P2} convient;
+        \item Si $e = e_1 \;|\; e_2$, alors \texttt{if (Unknown) then P1 else P2} convient;
+        \item Si $e = e_1^*$, alors \texttt{while (Unknown) do P1} convient;
+    \end{itemize}
+\end{preuve}
+
+\section{Optimisations de l'implémentation pratique}
+
+\subsection{Explosion exponentielle du nombre d'états de l'automate}
+
+\begin{proposition}[Union exponentielle]
+    Soit $\mathcal{A}$ l'automate entrant dans une branche \texttt{if}/\texttt{else}, $\mathcal{A'}$
+    l'automate résultant. Si aucune des deux branches possibles n'a de primitive d'effacement de lettres sur $\mathcal{A}$,
+    alors $\mathcal{A'}$ a au moins 2 fois plus d'états que $\mathcal{A}$.
+\end{proposition} 
+
+\begin{preuve}
+    La preuve est immédiate de par l'action d'union d'automates "mis côtes à côtes" qui duplique
+    les états de l'automate initial.
+\end{preuve}
+
+On a un doublement d'état, or c'est pas toujours nécessaire de vraiment doubler les états,
+comme le montre l'exemple suivant:
+% TODO montrer programme explosion_etats1 pour montrer qu'on peut réduire exponentiellement, pour justifier ce qui suit.
+
+Pour parier à ce problème, on introduit la notion d'automate minimal à l'aide des propositions suivantes.
+
+\begin{definition}[Automate, DFA]
+    On considère par la suite un automate $\mathcal{A} = (Q, \Sigma, q_0, F)$.
+\end{definition}
+
+
+\begin{definition}[Résiduel]
+    On appelle \emph{résiduel} ou \emph{quotient à gauche} d'un langage $L$ tout langage
+    de la forme $u^{-1}L = \{v \in \Sigma^*, u.v \in L\}$ \\
+    L'ensemble des résiduels d'un langage L s'écrit alors $res(L)$.
+\end{definition}
+
+
+\begin{proposition}
+    Pour $\mathcal{A}$ complet reconnaissant L
+    et tel que tous ses états soient accessible, on a
+    $\{L_q, q \in Q\} = res(L)$
+\end{proposition}
+
+\begin{preuve}
+    \fbox{$\subseteq$} : Soit $ L_q$ pour $q \in Q$. Vu $q$ accessible, il existe $w \in \Sigma^*$
+    tel que $q_{0}.w = q$. Alors:
+    \begin{align*}
+        L_q & = \{u \;|\; q.u \in F\} \\
+            & = \{u \;|\; (q_0.w).u \in F\} \\
+            & = \{u \;|\; w.u \in L\} \\
+            & = w^{-1}L
+    \end{align*}
+    D'où l'inclusion.
+    
+    \fbox{$\supseteq$} : Soit $u^{-1}L \in res(L)$. Vu $\mathcal{A}$ complet, soit
+    $q = q_{0}.u$. On a alors $u^{-1}L = L_q$. D'où l'inclusion réciproque.
+\end{preuve}
+
+\begin{corollaire}
+    Tout langage rationnel a un nombre fini de résiduels,
+    et tout automate déterministe reconnaissant L possède au moins $|res(L)|$ états.
+\end{corollaire}
+
+\begin{definition}[Congruence de Nérode]
+    La congruence de Nérode est une relation d'équivalence sur les états de $\mathcal{A}$
+    définie par: pour tout $q, q' \in Q$, on a $[q] = [q'] \Leftrightarrow L_q = L_{q'}$.
+\end{definition}
+
+% TODO rajouter une transition pour l'existence de l'automate minimal etc
+
+\begin{mdalgo}[Algorithme de minimisation de Brzozowski] % TODO regarder autre algo itératif pour trouvere les classes
+    Soient:
+    \begin{itemize}[topsep=0pt, itemsep=0pt]
+        \item $d(\mathcal{A})$ la partie accessible du déterminisé "par parties" de $\mathcal{A}$
+        \item $t(\mathcal{A})$ le transposé de $\mathcal{A}$.
+    \end{itemize} \hfill\break
+    Alors $d(t(d(t(\mathcal{A}))))$ est l'automate minimal de $\mathcal{A}$.
+\end{mdalgo}
+
+\begin{preuve}
+    Cet automate reconnaît le même langage que $\mathcal{A}$ sans soucis. \\
+    De plus, soient $P$ et $P'$ deux états distincts de $\mathcal{A}'$.
+    Par définition, $P$ et $P'$ sont deux ensembles-états de l'automate $d(t(\mathcal{A}))$.
+    Soit $R$ un état de $d(t(\mathcal{A}))$, tel que $R \in P$ et $R \notin P'$. $R$ est aussi un ensemble-état, qui vérifie,
+    par définition du transposé, $R = \{q \;|\; q \xrightarrow{w} f \text{ dans } \mathcal{A} \text{, avec } f \in F\}$ pour un certain mot $w$.
+    On en déduit que dans $\mathcal{A'}$, il existe un chemin étiquetté par $w$ vers un état final,
+    alors que ce n'est pas le cas pour $P'$. Donc $L_P \neq L_{P'}$ et $P$, $P'$ ne sont pas équivalents.
+\end{preuve}
+
+
+% TODO inclure graphique d'évolution d'états: on est content !
+% TODO code candidat sur diapo tétraconcours
+Malheureusement, il arrive que cette minimisation ne soit pas suffisante.
+
+
+\subsection{Explosion déterministe du nombre d'états de l'automate}
+
+Considérons le programme [...]. Son analyse génère le langage décrit ci-dessous:
+% TODO montrer programme explosion_etats2 avec les langages An.
+
+\begin{proposition}
+    Tout automate déterministe $\mathcal{A}_n$ reconnaissant le langage défini par "l'ensemble des mots ayant la lettre
+    \emph{\texttt{a}} $n$ lettres avant la fin" possède au moins $2^n$ états.
+\end{proposition}
+
+\begin{preuve}
+    Supposons par l'absurde disposer d'un automate déterministe $\mathcal{A}_n$
+    reconnaissant ce langage et possédant $|Q| < 2^n$ états. \\
+    Soit $M = \Sigma^n$. Soit $u \in M$. On peut lire $u$ dans $\mathcal{A}_n$, car le mot $u.0^{n+1}$
+    est accepté par l'automate et son préfixe $u$ n'est donc pas bloquant. On peut ainsi lire tout mot de $M$ dans $\mathcal{A}_n$.
+    De plus, on a $|M| = 2^n > |Q|$, donc par lemme des tiroirs: il existe $m, m' \in M$ et $q \in Q$ tel que $q_0.m = q_0.m' = q$
+    et $m \neq m'$. On pose $m = m_1...m_n$ (resp. $m'$). Soit $k$ tel que $m_k \neq m'_k$. On pose $m_k = a$ et $m'_k \neq a$ (sans perte
+    de généralité). On a donc $u = m_1...m_k.0^n$ accepté par $\mathcal{A}_n$, et $v = m_1...m_k.0^n$ non-accepté.
+    Or, $\mathcal{A}_n$ est déterministe, donc $q.0^n$ ne peut amener que dans un seul état. Il vient que $q_0.u = q_0.v$.
+    Finalement, cet état est à la fois final et non-final. On obtient une absurdité.
+\end{preuve}
+
+Il est pourtant très facile d'écrire un automate non-déterministe reconnaissant ce langage
+avec une croissance linéaire en n.  \\ % TODO inclure image
+Une solution consisterait alors à trouver un automate minimal non-déterministe, qui permet une représentation
+(exponentiellement) plus compactes. Je n'ai pas eu le temps de me pencher sur cette question,
+les algorithmes permettant une telle minimisation étant très complexes.
+
+\section{Justification du choix de l'object d'étude}
+
+L'étude a ici été limitée aux langages réguliers, et non pas aux langages algébriques. En effet,
+le problème d'une inclusion dans une autre est indécidable dans le cas général, ce qui rend impossible la vérification
+de la correction d'une analyse. On le montre ici par le biais de plusieurs propositions préliminaires.
+On admet tout d'abord que le problème de Post, défini ci-après, est indécidable:
+
+\hfill\newline
+\textbf{CorrespondancePost} \\
+\underline{Entrée:} Des couples de mots $\{(u_1, v_1), ..., (u_n, v_n)\}$ \\
+\underline{Sortie:} Vrai s'il existe une suite
+    $(i_p)_{p \in [1, m]}$ avec $u_{i_1}...u_{i_m} = v_{i_1}...v_{i_m},$ Faux sinon \newline
+
+\begin{proposition}
+    Le problème suivant est indécidable: \\
+    \underline{Entrée:} $G$ une grammaire non-contextuelle \\
+    \underline{Sortie:} Vrai si $L(G) = \Sigma^*$, Faux sinon
+\end{proposition}
+
+\begin{preuve}
+    Pour une entrée donnée de Post, on fixe le langage $L_u$ (resp. $L_v$) défini
+    sur l'alphabet $\Sigma_1 = \Sigma \cup A$ avec $A = \{a_1, ..., a_n\}$ des nouvelles lettres, par la grammaire suivante:
+    $S \longrightarrow u_1 S a_1 \;|\; ... \;|\; u_n S a_n$ (de même pour $L_v$). Ces deux grammaires sont
+    non-ambigües, et on a les équivalences suivantes:
+    \begin{align*}
+        \text{Il n'existe pas de solution à l'entrée de Post} & \iff L_u \cap L_v = \emptyset \\
+                                                              & \iff (L_u \cap L_v)^c = \Sigma_1^* \\
+                                                              & \iff L_u^c \cup L_v^c = \Sigma_1^*
+    \end{align*} 
+    Où l'on aura noté $L^c$ le complémentaire de $L$, et où on admet que
+    $L_u^c$ et $L_v^c$ sont encore algébriques (donc leur union l'est également).
+    D'où une réduction du problème de Post à notre problème avec $G = L_u^c \cup L_v^c$ et $\Sigma = \Sigma_1$, d'où l'indécidabilité.
+\end{preuve}
+
+\begin{corollaire}
+    Le problème suivant est indécidable: \\
+    \underline{Entrée:} $G$, $G'$ des grammaires non-contextuelles \\
+    \underline{Sortie:} Vrai si $L(G') \subseteq L(G)$, Faux sinon
+\end{corollaire}
+
+\begin{preuve}
+    Il suffit de remarquer dans la proposition qui précède que $\Sigma^* = L(G)$ est équivalent
+    à $\Sigma^* \subseteq L(G)$.
+\end{preuve}
+
+Ce corollaire achève de démontrer qu'il aurait été impossible d'appliquer sur les grammaires
+la même méthode de vérification par inclusion dans une langage de référence que les automates.
+
+
+\section{Conclusion} % TODO réécrire la conclusion lol
+Nous avons construit un domaine fonctionnel qui permet de reconnaître automatiquement certaines propriétés vérifiées par un string,
+tout en s'inquiétant de l'efficacité de l'implémentation pour éviter une explosion de complexité.
+Tout est une question de compromis, nous avons ici construit un domaine coûteux en temps d'analyse
+comparé à un simple domaine préfixe par exemple, mais qui permet une précision bien supérieure
+sur les propriétés du string construit. Ça dépend évidemment des propriété qu'on veut vérifier.
+Autres travaux existant: domaine qui prend un automate de référence et fait avancer l'automate au fil du programme.
+Futur travail: [...].
+
+\bibliographystyle{plain}
+\bibliography{../bibliographie/bibliographie}
+
+
+\section{Annexe}
+% Mettre les programmes auxquels je fais mention + haut ici.
+% Programme modulo 3 exemple.
+
+
+
+
+\end{document}
